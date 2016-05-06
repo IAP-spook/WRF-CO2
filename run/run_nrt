@@ -1,0 +1,211 @@
+#!/usr/bin/env python
+"""	run_nrt
+	main wrapper script for WRF-CO2
+	near real time functionality
+	Orig: C. Martin - 4/2016
+	Five steps:
+		1 - Get Met Boundary Conditions
+		2 - Preprocess Met Data
+		3 - Preprocess Emiss/Chem ic/bc
+		4 - Run WRF-Chem
+		5 - Make plots
+"""
+from wrfco2 import * # import WRF-CO2 modules and functions
+import os
+from datetime import datetime,timedelta
+import logging
+import sys
+import subprocess
+
+starttime = datetime.utcnow()
+
+#=========== user defined parameters =============
+#rootdir = os.path.abspath(os.pardir) # assumes this file is in rootdir/run
+rootdir = os.path.dirname(__file__)
+rootdir = os.path.join(rootdir, '..')
+print(rootdir)
+inputdir = rootdir+'/input'
+outputrootdir = rootdir+'/output'
+met_input = 'HRRRv2'
+configdir = rootdir+'/run/config'
+logdir = rootdir+'/logs'
+sensedatadir = inputdir+'/SENSE-BW/data/A2/LGR/K30/daily'
+
+
+#=========== other parameters for NRT mode ==========
+logFile = logdir+'/NRT_'+starttime.strftime('%Y%m')+'.log'
+logging.basicConfig(filename=logFile,level=logging.INFO,format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+log = logging.getLogger()
+log.info('---------------------------------------------------------------------------------')
+log.info('[ run_nrt ] - WRF-CO2 - C. Martin')
+
+yesterday = starttime - timedelta(days=1)
+wrfstart = datetime.strptime(datetime.strftime(yesterday.date(),'%Y%m%d'),'%Y%m%d')
+wrfend = wrfstart + timedelta(hours = 24)
+configdir = configdir+'/NRT'
+
+#- domain options for emission file creation
+lat_s = 38.265
+lat_n = 39.865
+lat_w = -77.615
+lat_e = -76.035
+res = 0.01 # in degrees so ~1km
+
+
+
+#=========== Step 1 - Get Met Bndy Conditions =========
+#- create dir for met data
+metdir = inputdir+'/'+met_input+'/'+yesterday.strftime('%Y%m%d')
+try:
+  os.makedirs(metdir)
+  log.info('Created data directory: '+metdir)
+except OSError:
+  log.info('Directory already exists: '+metdir)
+  if not os.path.isdir(metdir):
+     raise
+
+#- get yesterday's HRRRv2 data from NOAA
+#!!!! NOTE: dt2 doesn't allow internet access on compute nodes
+# 	    so must ssh into login node to perform this
+log.info('Writing scripts to execute on login node')
+f = open(metdir+'/download.sh','w')
+f.write('#!/bin/bash\nsource /homes/cmart90/.bashrc.mine\n')
+f.write('python '+metdir+'/download.py')
+f.close()
+f = open(metdir+'/download.py','w')
+f.write('import wrfco2.wrf as wrf\n')
+f.write('from datetime import datetime\n')
+f.write("yesterday = datetime.strptime('"+datetime.strftime(yesterday,'%Y%m%d')+"','%Y%m%d')\n")
+f.write('wrf.getMet("HRRRv2",yesterday,"00","'+metdir+'")')
+f.close()
+log.info('SSHing to login node to download data, DT2 compute nodes do not have internet access...')
+subprocess.call(['ssh','login.deepthought2.umd.edu','bash '+metdir+'/download.sh'])
+
+
+
+#=========== Step 2 - Preprocessing Met ==============
+#- create working directory for output
+workdir = outputrootdir+'/'+yesterday.strftime('%Y%m%d')
+try:
+  os.makedirs(workdir)
+  log.info('Created working directory: '+workdir)
+except OSError:
+  log.info('Directory already exists: '+workdir)
+  if not os.path.isdir(workdir):
+     raise
+
+#- link WRF files to working directory
+wrf.linkWPS(workdir,rootdir+'/WPS')
+wrf.linkWRF(workdir,rootdir+'/WRF/run')
+
+#- write namelists
+wrf.writeNml(configdir,workdir,wrfstart,wrfend)
+
+#- run geogrid
+log.info('Running geogrid...')
+sp = subprocess.Popen('./geogrid.exe > geogrid.out 2> geogrid.err',cwd=workdir,shell=True)
+sp.wait()
+log.info('Geogrid run complete')
+
+#- link boundary/initial conditions for meteorology
+log.info('running link_grib.csh...')
+sp=subprocess.Popen([workdir+'/link_grib.csh',metdir+'/hrrr*'],cwd=workdir)
+sp.wait()
+
+#- run ungrib
+log.info('Running ungrib...')
+sp = subprocess.Popen('./ungrib.exe > ungrib.out 2> ungrib.err',cwd=workdir,shell=True)
+sp.wait()
+log.info('Ungrib run complete')
+
+#- run metgrid
+log.info('Running metgrid...')
+sp = subprocess.Popen('./metgrid.exe > metgrid.out 2> metgrid.err',cwd=workdir,shell=True)
+sp.wait()
+log.info('Metgrid run complete')
+
+#- run real.exe
+log.info('Running real...')
+sp = subprocess.Popen('./real.exe > real.out 2> real.err',cwd=workdir,shell=True)
+sp.wait()
+log.info('Real run complete')
+
+#- clean up ungrib files to save space afterwards
+from glob import glob
+try:
+  for f in glob(workdir+'/FILE:*'):
+    os.remove(f)
+  log.info('ungrib files removed to save space')
+except:
+  log.error('ungrib files were not removed')
+
+#========== Step 3 - preprocess emiss & CO2 bc/ic ========
+#- GEOSchem initial and boundary conditions
+"""NOTE!!! FIX THIS LATER, ONLY LINKING THE SAME FILE AND REPEATING INPUT FOR EACH RUN"""
+"""ALSO Fix geos2wrf module date2index spots!"""
+"""Also make it so it looks in rootdir/input/geoschem or something like that"""
+try:
+  os.symlink('/lustre/cmart90/dataout/jdas/GEOSChem_20160309.nc','/lustre/cmart90/datasets/GEOSChem/GEOSChem_'+datetime.strftime(wrfstart,"%Y%m%d")+'.nc')
+except:
+  pass
+log.info('NOTE!: using same GEOSChem with symlink currently')
+log.info('Modifying boundary conditions with GEOSChem input')
+geos2wrf.geos2wrf('/lustre/cmart90/datasets/GEOSChem/',workdir,'d01')
+
+#- FFDAS emissions set creation
+""" NOTE: Fix this later to look in the rootdir+/input/FFDAS directory I think?"""
+ffdasorigdir = '/lustre/liu6/datasets/FFDAS/Orig/2012new'
+ffdasprepdir = inputdir+'/FFDAS/2012_Daily_World'
+wrf_prefix = 'wrfchemi_d01_'
+log.info('Now preprocessing FFDAS flux input')
+ffdasorig = ffdasorigdir+'/d'+datetime.strftime(wrfstart,"%j")+'.nc'
+ffdasint = ffdasprepdir+'/d'+datetime.strftime(wrfstart,"%j")+'.nc'
+ffdas.prep(ffdasorig,ffdasint) # convert 24 x,y to x,y,t file
+ffdasout = workdir+'/'+wrf_prefix+datetime.strftime(wrfstart,"%Y-%m-%d_%H:%M:%S")
+datestr = datetime.strftime(wrfstart,"%Y%m%d")
+ffdas2wrf.regrid(ffdasint,ffdasout,lat_s,lat_n,lat_w,lat_e,res,datestr)
+
+#============== Step 4 - run WRF-Chem ===================
+log.info('Running WRF...')
+sp = subprocess.Popen('mpirun ./wrf.exe > wrf.out 2> wrf.err',cwd=workdir,shell=True)
+sp.wait()
+log.info('WRF run complete')
+
+
+
+#============== Step 5 - make plots ==================
+# set up plot directory
+plotdir = workdir+'/plots'
+try:
+  os.makedirs(plotdir)
+  log.info('Created plotting directory: '+plotdir)
+except OSError:
+  log.info('Directory already exists: '+plotdir)
+  if not os.path.isdir(plotdir):
+     raise
+
+# surface co2 animated plot
+plots.CO2nWind(workdir+'/wrfout_d01_'+datetime.strftime(wrfstart,"%Y-%m-%d_%H:%M:%S"),plotdir)
+subprocess.call(['convert','-delay','50','-loop','0',plotdir+'/*_CO2_wind.png',plotdir+'/CO2_wind.gif'])
+#subprocess.call(['scp',plotdir+'/CO2_wind.gif','cmartin@gw.atmos.umd.edu:~/www/nrt/.'])
+
+# comparison time series
+try:
+  plots.UMDmodelVcss(workdir+'/wrfout_d01_'+datetime.strftime(wrfstart,"%Y-%m-%d_%H:%M:%S"),sensedatadir+'/'+datetime.strftime(wrfstart,"%Y%m%d.txt"),plotdir)
+except:
+  pass
+#subprocess.call(['scp',plotdir+'/UMDvWRF.png','cmartin@gw.atmos.umd.edu:~/www/nrt/.'])
+
+# vertical profiles
+plots.theta_co2_profiles(workdir+'/wrfout_d01_'+datetime.strftime(wrfstart,"%Y-%m-%d_%H:%M:%S"),plotdir)
+plots.anim_profiles(workdir+'/wrfout_d01_'+datetime.strftime(wrfstart,"%Y-%m-%d_%H:%M:%S"),plotdir)
+subprocess.call(['convert','-delay','50','-loop','0',plotdir+'/*_anim_profiles.png',plotdir+'/theta_co2_profiles.gif'])
+
+# copy files to nrt directory to rsync with website
+import shutil
+nrtwebdir =  outputrootdir+'/nrt_mostrecent' 
+shutil.copy(plotdir+'/CO2_wind.gif',nrtwebdir+'/yest_CO2sfc.gif')
+shutil.copy(plotdir+'/theta_co2_profiles.gif',nrtwebdir+'/yest_profiles.gif')
+shutil.copy(plotdir+'/theta_co2_profiles.png',nrtwebdir+'/yest_profiles_6hr.png')
+shutil.copy(plotdir+'/UMDLGRvWRF.png',nrtwebdir+'/yest_UMDLGRvWRF.png')
+#===================== DONE =================================

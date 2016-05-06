@@ -1,0 +1,34 @@
+tree
+
+.
+|-- config
+|   `-- NRT
+|       |-- namelist.input
+|       `-- namelist.wps
+|-- input -> /lustre/cmart90/datasets/
+|-- logs -> /lustre/cmart90/modeling/WRF-CO2_NRT/logs
+|-- output -> /lustre/cmart90/modeling/WRF-CO2_NRT/output
+|-- README.20160421
+|-- run
+|   |-- run_nrt
+|   `-- submit_nrt.sh
+|-- src
+|   `-- wrfcdas
+|       |-- setup.py
+|       |-- wrfcdas
+|       |   |-- ffdas2wrf.py
+|       |   |-- ffdas.py
+|       |   |-- geos2wrf.py
+|       |   |-- __init__.py
+|       |   |-- __init__.pyc
+|       |   |-- plots.py
+|       |   `-- wrf.py
+|       `-- wrfcdas.egg-info
+|           |-- dependency_links.txt
+|           |-- not-zip-safe
+|           |-- PKG-INFO
+|           |-- requires.txt
+|           |-- SOURCES.txt
+|           `-- top_level.txt
+|-- WPS -> /lustre/cmart90/wrf/WPS
+`-- WRF -> /lustre/cmart90/wrf/WRFV3.chem.compiled/

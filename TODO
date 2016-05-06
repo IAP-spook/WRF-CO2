@@ -1,0 +1,6 @@
+4/22/2016
+	Modify ffdas code in run_nrt to be fnet or ffe
+	symbolically link ffdas.py to ffe.py
+	rethink ffdas2wrf.py also? (combine them?)
+	make automated webpage with plots
+	make more plots (animated vert profiles, 4/8 fixed vertical profile pic, time series)

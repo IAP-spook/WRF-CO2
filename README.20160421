@@ -1,0 +1,5 @@
+to setup WRF-CO2
+ - install python package wrfcdas
+ 	$ cd src/wrfcdas
+	$ python setup.py install/develop
+

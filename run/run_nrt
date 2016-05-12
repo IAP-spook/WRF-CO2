@@ -16,6 +16,7 @@ from datetime import datetime,timedelta
 import logging
 import sys
 import subprocess
+import shutil
 
 starttime = datetime.utcnow()
 
@@ -97,6 +98,11 @@ except OSError:
 #- link WRF files to working directory
 wrf.linkWPS(workdir,rootdir+'/WPS')
 wrf.linkWRF(workdir,rootdir+'/WRF/run')
+
+#- copy restart file @ C. Martin - 5/2016
+prevday = yesterday - timedelta(days=1)
+restartfile = outputrootdir+'/'+prevday.strftime('%Y%m%d')+'/'+yesterday.strftime('wrfrst_d01_%Y-%m-%d_%H:%M:%S')
+shutil.copy(restartfile,workdir+'/.')
 
 #- write namelists
 wrf.writeNml(configdir,workdir,wrfstart,wrfend)
@@ -202,7 +208,6 @@ plots.anim_profiles(workdir+'/wrfout_d01_'+datetime.strftime(wrfstart,"%Y-%m-%d_
 subprocess.call(['convert','-delay','50','-loop','0',plotdir+'/*_anim_profiles.png',plotdir+'/theta_co2_profiles.gif'])
 
 # copy files to nrt directory to rsync with website
-import shutil
 nrtwebdir =  outputrootdir+'/nrt_mostrecent' 
 shutil.copy(plotdir+'/CO2_wind.gif',nrtwebdir+'/yest_CO2sfc.gif')
 shutil.copy(plotdir+'/theta_co2_profiles.gif',nrtwebdir+'/yest_profiles.gif')

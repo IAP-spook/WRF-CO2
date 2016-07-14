@@ -1,0 +1,10 @@
+Metadata-Version: 1.0
+Name: wrfco2
+Version: 0.1
+Summary: WRF-CO2 Python Framework Package
+Home-page: http://aosc.umd.edu/~cmartin/wrfco2
+Author: Cory Martin
+Author-email: cmart90@umd.edu
+License: MIT
+Description: UNKNOWN
+Platform: UNKNOWN

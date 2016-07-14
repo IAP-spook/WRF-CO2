@@ -4,6 +4,17 @@ import os
 
 log = logging.getLogger(__name__)
 
+# parallelize downloading to speed up process
+def dload(dfile,outfile):
+    import urllib2
+    import ssl
+    print('downloading '+dfile)
+    gcontext = ssl.SSLContext(ssl.PROTOCOL_TLSv1) # fixes error
+    f = urllib2.urlopen(dfile)
+    data = f.read()
+    with open(outfile,'wb') as output:
+           output.write(data)
+
 def getMet(model,date,inittime,outdir,length='All'):
 #  """ Downloads meteorology to <outdir> from
 #  a specified model <model> and for a specified
@@ -11,6 +22,7 @@ def getMet(model,date,inittime,outdir,length='All'):
 #  """
     log = getFnLog()
     import urllib2
+    import multiprocessing
     import ssl # skip ssl vertification, fixes error
     gcontext = ssl.SSLContext(ssl.PROTOCOL_TLSv1) # fixes error
 #  try:
@@ -43,16 +55,17 @@ def getMet(model,date,inittime,outdir,length='All'):
       filename_template = 'hrrr.t{0:02}z.wrfprsf{1:02}.grib2'
       for Hr in range(0,length,1):
         filename=filename_template.format(Hr,inittime)
-        log.info('Downloading {0} ...'.format(filename))
-        log.info('Downloading file: '+date.strftime(\
+        #log.info('Downloading {0} ...'.format(filename))
+        #log.info('Downloading file: '+date.strftime(\
+        #        'http://www.ftp.ncep.noaa.gov/data/nccf/nonoperational/com/hrrr/prod/hrrr.%Y%m%d/')\
+        #        +filename)
+        fname = date.strftime(\
                 'http://www.ftp.ncep.noaa.gov/data/nccf/nonoperational/com/hrrr/prod/hrrr.%Y%m%d/')\
-                +filename)
-        f = urllib2.urlopen(date.strftime(\
-                'http://www.ftp.ncep.noaa.gov/data/nccf/nonoperational/com/hrrr/prod/hrrr.%Y%m%d/')\
-                +filename)
-        data = f.read()
-        with open(outdir+'/'+filename,'wb') as output:
-           output.write(data)
+                +filename
+        fdest = outdir+'/'+filename
+        p = multiprocessing.Process(target=dload, args=(fname,fdest))
+	p.start()
+      p.join()
       # also download 0z of today to make WRF happy
       filename = filename_template.format(0,0)
       from datetime import timedelta

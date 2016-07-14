@@ -1,0 +1,7 @@
+logging
+numpy
+netCDF4
+matplotlib
+scipy
+cdo
+Basemap

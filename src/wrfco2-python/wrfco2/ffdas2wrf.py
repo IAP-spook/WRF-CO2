@@ -30,7 +30,8 @@ def regrid2(infile,geofilename,datestr):
 	lat_s = latwrf[0,0];lat_n = latwrf[-1,-1]
 	lon_w = lonwrf[0,0];lon_e = lonwrf[-1,-1]
 	# get the resolution in degrees
-	res = (lat_n - lat_s)/len(latwrf[0,:]) 
+	res = (lat_n - lat_s)/len(latwrf[0,:])
+	print res 
 	# get input lat and lon
 	lat1 = datain.variables['latitude'][:]
 	lon1 = datain.variables['longitude'][:]
@@ -45,7 +46,7 @@ def regrid2(infile,geofilename,datestr):
 	# the FFDAS data is in units kg/cell/hr
 	# must convert it to mol/km^2/hr for WRF
 	mass_C = 12.
-	area_div = (0.1/res)**2 # change in resolution squared to divide by
+	area_div = (0.1/11)**2 # assuming 11km for each 0.1 degree and squaring it for km^2
 	# open the output file for writing
 	# get the path to the output file
 	# wrf looks for wrfchemi_dXX_YYYY-MM-DD_HH:MM:SS
@@ -69,7 +70,7 @@ def regrid2(infile,geofilename,datestr):
 	# regrid the data
 	for i in range(0,24):
 		regridded = interpolate.griddata((lons.flatten(),lats.flatten()),fluxsubset[i].flatten(),(lonwrf,latwrf),method='linear')
-		newflux[i,0,:,:] = (regridded*1000./mass_C)/area_div # convert to g and then moles then divide by new area
+		newflux[i,0,:,:] = (regridded*1000./mass_C)/area_div # convert to g and then moles then divide to get km^2
 	# set up output file
 	timeout = dataout.createDimension("Time", None)
 	StrLength = dataout.createDimension("StrLength", 19)
@@ -88,7 +89,7 @@ def regrid2(infile,geofilename,datestr):
 	dataout.description = "Regridded FFDAS flux netCDF file - "+str(res)+" degree"
 	dataout.history = "Created " + time.ctime(time.time())
 	dataout.source = "ffdas2wrf.py - C. Martin - Univ. of MD - 7/2016"
-	co2.units = "kgC/cell/h"
+	co2.units = "mol/km^2/hr"
 	dataout.setncattr("MMINLU", "USGS")
 	dataout.setncattr("NUM_LAND_CAT", 24)
 	# write to file

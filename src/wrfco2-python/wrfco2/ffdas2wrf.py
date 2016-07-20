@@ -31,7 +31,6 @@ def regrid2(infile,geofilename,datestr):
 	lon_w = lonwrf[0,0];lon_e = lonwrf[-1,-1]
 	# get the resolution in degrees
 	res = (lat_n - lat_s)/len(latwrf[0,:])
-	print res 
 	# get input lat and lon
 	lat1 = datain.variables['latitude'][:]
 	lon1 = datain.variables['longitude'][:]
@@ -46,7 +45,7 @@ def regrid2(infile,geofilename,datestr):
 	# the FFDAS data is in units kg/cell/hr
 	# must convert it to mol/km^2/hr for WRF
 	mass_C = 12.
-	area_div = (0.1/11)**2 # assuming 11km for each 0.1 degree and squaring it for km^2
+	area_div = 11**2 # assuming 11km for each 0.1 degree and squaring it for km^2
 	# open the output file for writing
 	# get the path to the output file
 	# wrf looks for wrfchemi_dXX_YYYY-MM-DD_HH:MM:SS
